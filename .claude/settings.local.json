@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(chmod:*)",
+      "Bash(/Users/ian/Projects/MyProjects/ai-developer-system/requirements.txt << 'EOF'\n# AI Developer System - Python Dependencies\n\n# Anthropic\nanthropic>=0.40.0\n\n# Git\ngitpython>=3.1.40\n\n# Utilities\npython-dotenv>=1.0.0\npydantic>=2.0.0\n\n# Optional: Browser Automation\nplaywright>=1.40.0\n\n# Development\npytest>=7.4.0\nblack>=23.0.0\nisort>=5.12.0\nEOF)",
+      "Bash(/Users/ian/Projects/MyProjects/ai-developer-system/.gitignore << 'EOF'\n# AI Developer System - Git Ignore\n\n# Python\n__pycache__/\n*.py[cod]\n*$py.class\n*.so\n.Python\nbuild/\ndevelop-eggs/\ndist/\ndownloads/\neggs/\n.eggs/\nlib/\nlib64/\nparts/\nsdist/\nvar/\nwheels/\n*.egg-info/\n.installed.cfg\n*.egg\n\n# Virtual Environment\nvenv/\nENV/\n.venv\n\n# IDE\n.vscode/\n.idea/\n*.swp\n*.swo\n*~\n\n# OS\n.DS_Store\nThumbs.db\n\n# Project specific\nworkspace/\nlogs/\n*.log\n.claude/checkpoints/\n\n# Environment\n.env\n.env.local\n.env.*.local\nEOF)",
+      "Bash(python3:*)",
+      "Bash(git init:*)",
+      "Bash(git add:*)"
+    ]
+  }
+}

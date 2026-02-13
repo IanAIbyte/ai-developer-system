@@ -1,0 +1,45 @@
+{
+  "agents": {
+    "initializer": {
+      "type": "InitializerAgent",
+      "description": "Sets up project environment and generates feature list",
+      "triggers": ["project_creation"],
+      "max_retries": 1
+    },
+    "coding": {
+      "type": "CodingAgent",
+      "description": "Implements features incrementally",
+      "triggers": ["manual", "scheduler"],
+      "max_retries": 3
+    },
+    "testing": {
+      "type": "TestingAgent",
+      "description": "Validates features with E2E tests",
+      "triggers": ["after_coding"],
+      "max_retries": 2
+    },
+    "code_review": {
+      "type": "CodeReviewAgent",
+      "description": "Reviews code for quality and security",
+      "triggers": ["before_commit"],
+      "max_retries": 1
+    }
+  },
+  "scheduler": {
+    "default_mode": "manual",
+    "max_sessions": 1000,
+    "checkpoint_frequency": 5,
+    "auto_retry_on_failure": true
+  },
+  "state_management": {
+    "checkpoint_enabled": true,
+    "git_integration": true,
+    "progress_tracking": true
+  },
+  "testing": {
+    "e2e_framework": "playwright",
+    "screenshot_on_failure": true,
+    "video_recording": false,
+    "test_timeout_seconds": 30
+  }
+}
