@@ -15,7 +15,9 @@
       "Bash(source:*)",
       "Bash(env:*)",
       "Bash(./workspace/demo-todo-app/user_prompt.txt << 'EOF'\n构建一个简单的待办事项应用（Todo App）：\n\n功能需求：\n1. 用户可以添加新的待办事项\n2. 用户可以标记待办为完成状态\n3. 用户可以删除待办事项\n4. 用户可以按状态筛选待办（全部/未完成/已完成）\n5. 使用 localStorage 持久化数据\n\n技术栈：\n- 前端框架：Next.js + TypeScript\n- 样式：Tailwind CSS\n- 状态管理：React Hooks \\(useState, useEffect\\)\n- 数据持久化：localStorage\nEOF)",
-      "Bash(git -C ./workspace/demo-todo-app log --oneline -5)"
+      "Bash(git -C ./workspace/demo-todo-app log --oneline -5)",
+      "Bash(git -C ./workspace/demo-todo-app log --oneline -10)",
+      "Bash(git -C ./workspace/demo-todo-app diff --stat HEAD~2..HEAD)"
     ]
   }
 }
