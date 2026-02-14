@@ -16,14 +16,31 @@ from pathlib import Path
 
 class GLM5Client:
     """
-    GLM-5 API 客户端
+    GLM API 客户端（支持 GLM Coding Plan Pro 套餐）
 
     文档: https://docs.bigmodel.cn/cn/api/introduction
-    GLM-5 是智谱AI为智能体工程优化的模型
+    套餐: https://www.bigmodel.cn/glm-coding
+
+    支持的套餐和模型：
+    - Pro 套餐：glm-4.7（推荐）、glm-4.6、glm-4.5、glm-4.5-air
+    - Max 套餐：glm-5、glm-4.7 等
     """
 
     API_BASE = "https://open.bigmodel.cn/api/paas/v4/chat/completions"
-    MODEL_NAME = "glm-5"  # 或 glm-5-flash, glm-5-air
+
+    # 根据套餐选择合适的模型
+    # Pro 套餐推荐使用 glm-4.7（专为代码生成优化）
+    # Max 套餐可以使用 glm-5
+    MODEL_NAME = "glm-4.7"  # 默认使用 GLM-4.7（Pro 套餐最佳选择）
+
+    # 可选模型列表
+    AVAILABLE_MODELS = {
+        "glm-4.7": "GLM-4.7（推荐）- Pro/Max 套餐，代码生成优化",
+        "glm-4.6": "GLM-4.6 - Pro/Max 套餐",
+        "glm-4.5": "GLM-4.5 - Pro/Max 套餐",
+        "glm-4.5-air": "GLM-4.5-Air - 轻量级，所有套餐",
+        "glm-5": "GLM-5 - 仅 Max 套餐"
+    }
 
     def __init__(self, api_key: Optional[str] = None):
         """
@@ -82,7 +99,8 @@ class GLM5Client:
             payload["tools"] = tools
 
         try:
-            response = self.client.post("/api/paas/v4/chat/completions", json=payload)
+            # base_url 已经包含完整路径，直接传空字符串
+            response = self.client.post("", json=payload)
             response.raise_for_status()
 
             if stream:
@@ -109,7 +127,9 @@ class GLM5Client:
             self,
             prompt: str,
             context: Optional[str] = None,
-            file_structure: Optional[Dict] = None
+            file_structure: Optional[Dict] = None,
+            temperature: float = 0.3,
+            max_tokens: int = 8192
     ) -> str:
         """
         生成代码（专用方法）
@@ -170,15 +190,22 @@ class GLM5Client:
 
         response = self.chat_completion(
             messages=messages,
-            temperature=0.3,  # 代码生成使用较低温度
-            max_tokens=8192
+            temperature=temperature,
+            max_tokens=max_tokens
         )
 
         if response.get("error"):
             raise Exception(f"API Error: {response['message']}")
 
         # 提取生成的内容
-        return response["choices"][0]["message"]["content"]
+        message = response["choices"][0]["message"]
+        content = message.get("content", "")
+
+        # 如果 content 为空，检查 reasoning_content（GLM-4.7 推理模型）
+        if not content and "reasoning_content" in message:
+            content = message["reasoning_content"]
+
+        return content
 
     def analyze_requirements(
             self,
@@ -258,7 +285,12 @@ class GLM5Client:
             raise Exception(f"API Error: {response['message']}")
 
         # 提取 JSON 内容
-        content = response["choices"][0]["message"]["content"]
+        message = response["choices"][0]["message"]
+        content = message.get("content", "")
+
+        # 如果 content 为空，检查 reasoning_content（GLM-4.7 推理模型）
+        if not content and "reasoning_content" in message:
+            content = message["reasoning_content"]
 
         # 尝试解析 JSON（可能包裹在 markdown 代码块中）
         try:
