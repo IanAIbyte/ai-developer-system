@@ -16,14 +16,15 @@ from pathlib import Path
 
 class GLM5Client:
     """
-    GLM API 客户端（支持 GLM Coding Plan Pro 套餐）
+    GLM API 客户端（支持 GLM Coding Plan Pro/Max 套餐）
 
     文档: https://docs.bigmodel.cn/cn/api/introduction
     套餐: https://www.bigmodel.cn/glm-coding
 
-    支持的套餐和模型：
-    - Pro 套餐：glm-4.7（推荐）、glm-4.6、glm-4.5、glm-4.5-air
-    - Max 套餐：glm-5、glm-4.7 等
+    支持的套餐和模型（更新于 2026-02-14）：
+    - Pro 套餐：glm-5（推荐）、glm-4.7、glm-4.6、glm-4.5、glm-4.5-air
+    - Max 套餐：glm-5（推荐）、glm-4.7 等
+    - Lite 套餐：glm-4.7 等（glm-5 支持即将上线）
 
     端点说明：
     - 通用 API: https://open.bigmodel.cn/api/paas/v4 (对话、分析等)
@@ -36,18 +37,18 @@ class GLM5Client:
     # Coding API 端点（仅用于代码生成）
     API_CODING = "https://open.bigmodel.cn/api/coding/paas/v4/chat/completions"
 
-    # 根据套餐选择合适的模型
-    # Max 套餐推荐使用 glm-5（最新最强模型）
-    # Pro 套餐可以使用 glm-4.7、glm-4.6、glm-4.5
+    # 根据套餐选择合适的模型（更新于 2026-02-14）
+    # Pro/Max 套餐推荐使用 glm-5（最新旗舰模型，编程体感逼近 Claude 4.5/4.6）
+    # Pro/Max 套餐也可以使用 glm-4.7、glm-4.6、glm-4.5
     MODEL_NAME = "glm-5"  # 默认使用 GLM-5（与官方示例一致）
 
-    # 可选模型列表
+    # 可选模型列表（更新于 2026-02-14）
     AVAILABLE_MODELS = {
-        "glm-4.7": "GLM-4.7（推荐）- Pro/Max 套餐，代码生成优化",
+        "glm-5": "GLM-5（推荐）- Pro/Max 套餐，最新旗舰模型",
+        "glm-4.7": "GLM-4.7 - Pro/Max 套餐，代码生成优化",
         "glm-4.6": "GLM-4.6 - Pro/Max 套餐",
         "glm-4.5": "GLM-4.5 - Pro/Max 套餐",
-        "glm-4.5-air": "GLM-4.5-Air - 轻量级，所有套餐",
-        "glm-5": "GLM-5 - 仅 Max 套餐"
+        "glm-4.5-air": "GLM-4.5-Air - 轻量级，所有套餐"
     }
 
     def __init__(self, api_key: Optional[str] = None):
