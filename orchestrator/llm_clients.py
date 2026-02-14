@@ -306,7 +306,8 @@ class GLM5Client:
                 "category": "authentication",
                 "priority": "critical/high/medium/low",
                 "description": "User can ...",
-                "steps": ["step 1", "step 2", ...],
+                "e2e_steps": ["step 1", "step 2", ...],
+                "verification_step": "验证页面跳转到 /dashboard 且显示用户名",
                 "passes": false,
                 "dependencies": []
             }
@@ -316,10 +317,14 @@ class GLM5Client:
 任务：将用户的需求分解为细粒度的、可测试的功能。
 
 每个功能应该：
-1. 聚焦于单个用户行为或系统功能
-2. 包含清晰的 E2E 测试步骤（1-3 个具体步骤）
+1. 聚焦于单个用户行为或系统功能（开发时间不超过 15 分钟）
+2. 包含清晰的 verification_step（验证步骤），例如：
+   - API 验证：访问 /api/health 接口，预期返回 status: 200
+   - UI 验证：检查登录按钮颜色是否为 #3B82F6（蓝色）
+   - 数据验证：验证 localStorage 中存在 'todos' 键
+   - 交互验证：点击按钮后，验证列表中新增了一项
 3. 有明确的优先级
-4. 标注依赖关系
+4. 标注依赖关系（如果功能 B 依赖功能 A，必须在 dependencies 中列出）
 
 功能 ID 格式：category-action-number (例如：auth-login-001)
 
@@ -337,7 +342,17 @@ class GLM5Client:
 - medium: 常规功能
 - low: 增强功能
 
-输出格式：JSON 数组
+输出格式：JSON 数组，每个功能包含：
+{
+  "id": "category-action-001",
+  "category": "authentication",
+  "priority": "critical",
+  "description": "用户可以登录系统",
+  "e2e_steps": ["打开登录页面", "输入用户名和密码", "点击登录按钮"],
+  "verification_step": "验证页面跳转到 /dashboard 且显示用户名",
+  "dependencies": [],
+  "passes": false
+}
 """
 
         messages = [
@@ -350,9 +365,12 @@ class GLM5Client:
 
 要求：
 1. 生成 {max_features} 个左右的功能（不必超过）
-2. 每个功能都包含 E2E 测试步骤（1-3 步）
-3. 使用 JSON 格式输出
-4. 功能 ID 按分类和编号命名"""
+2. 每个功能必须包含 e2e_steps（端到端测试步骤）和 verification_step（具体验证步骤）
+3. verification_step 必须明确、可执行、可验证（包含具体的预期结果）
+4. 如果涉及 UI，请注明具体的视觉验证要求（如颜色、位置、尺寸）
+5. 使用 JSON 格式输出
+6. 功能 ID 按分类和编号命名
+7. 确保依赖关系准确无误"""
             }
         ]
 
