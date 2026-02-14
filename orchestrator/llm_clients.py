@@ -37,9 +37,9 @@ class GLM5Client:
     API_CODING = "https://open.bigmodel.cn/api/coding/paas/v4/chat/completions"
 
     # 根据套餐选择合适的模型
-    # Pro 套餐推荐使用 glm-4.7（专为代码生成优化）
-    # Max 套餐可以使用 glm-5
-    MODEL_NAME = "glm-4.7"  # 默认使用 GLM-4.7（Pro 套餐最佳选择）
+    # Max 套餐推荐使用 glm-5（最新最强模型）
+    # Pro 套餐可以使用 glm-4.7、glm-4.6、glm-4.5
+    MODEL_NAME = "glm-5"  # 默认使用 GLM-5（与官方示例一致）
 
     # 可选模型列表
     AVAILABLE_MODELS = {
