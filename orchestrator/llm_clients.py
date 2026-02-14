@@ -24,9 +24,17 @@ class GLM5Client:
     支持的套餐和模型：
     - Pro 套餐：glm-4.7（推荐）、glm-4.6、glm-4.5、glm-4.5-air
     - Max 套餐：glm-5、glm-4.7 等
+
+    端点说明：
+    - 通用 API: https://open.bigmodel.cn/api/paas/v4 (对话、分析等)
+    - Coding API: https://open.bigmodel.cn/api/coding/paas/v4 (仅代码生成)
     """
 
-    API_BASE = "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+    # 通用 API 端点（用于对话、需求分析等）
+    API_GENERAL = "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+
+    # Coding API 端点（仅用于代码生成）
+    API_CODING = "https://open.bigmodel.cn/api/coding/paas/v4/chat/completions"
 
     # 根据套餐选择合适的模型
     # Pro 套餐推荐使用 glm-4.7（专为代码生成优化）
@@ -56,13 +64,24 @@ class GLM5Client:
                 "environment variable or pass api_key parameter."
             )
 
-        self.client = httpx.Client(
-            base_url=self.API_BASE,
+        # 通用 API 客户端（用于对话、需求分析等）
+        self.client_general = httpx.Client(
+            base_url=self.API_GENERAL,
             headers={
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json"
             },
             timeout=120.0
+        )
+
+        # Coding API 客户端（仅用于代码生成）
+        self.client_coding = httpx.Client(
+            base_url=self.API_CODING,
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            },
+            timeout=180.0  # Coding API 可能需要更长时间
         )
 
     def chat_completion(
@@ -74,7 +93,9 @@ class GLM5Client:
             stream: bool = False
     ) -> Dict:
         """
-        调用 GLM-5 对话补全 API
+        调用 GLM 通用对话补全 API
+
+        用于：需求分析、对话交互等通用场景
 
         Args:
             messages: 对话消息列表
@@ -99,8 +120,65 @@ class GLM5Client:
             payload["tools"] = tools
 
         try:
-            # base_url 已经包含完整路径，直接传空字符串
-            response = self.client.post("", json=payload)
+            # 使用通用 API 端点
+            response = self.client_general.post("", json=payload)
+            response.raise_for_status()
+
+            if stream:
+                # 流式响应
+                return {
+                    "stream": response.iter_bytes()
+                }
+
+            return response.json()
+
+        except httpx.HTTPStatusError as e:
+            return {
+                "error": True,
+                "status_code": e.response.status_code,
+                "message": str(e)
+            }
+        except Exception as e:
+            return {
+                "error": True,
+                "message": str(e)
+            }
+
+    def coding_completion(
+            self,
+            messages: List[Dict],
+            temperature: float = 0.3,
+            max_tokens: int = 8192,
+            stream: bool = False
+    ) -> Dict:
+        """
+        调用 GLM Coding API（专用端点）
+
+        用于：代码生成、代码优化等 Coding 场景
+
+        注意：此端点仅限 Coding 场景使用，不适用于通用对话
+
+        Args:
+            messages: 对话消息列表
+                [{"role": "user", "content": "..."}]
+            temperature: 温度参数 (0-1)
+            max_tokens: 最大 token 数
+            stream: 是否流式输出
+
+        Returns:
+            API 响应字典
+        """
+        payload = {
+            "model": self.MODEL_NAME,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "stream": stream
+        }
+
+        try:
+            # 使用 Coding API 端点
+            response = self.client_coding.post("", json=payload)
             response.raise_for_status()
 
             if stream:
@@ -188,7 +266,8 @@ class GLM5Client:
 
         messages.append({"role": "user", "content": full_prompt})
 
-        response = self.chat_completion(
+        # 使用 Coding API 端点进行代码生成
+        response = self.coding_completion(
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens
