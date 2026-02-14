@@ -72,7 +72,7 @@ class GLM5Client:
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json"
             },
-            timeout=120.0
+            timeout=300.0  # 增加到 5 分钟，避免超时
         )
 
         # Coding API 客户端（仅用于代码生成）
@@ -289,13 +289,15 @@ class GLM5Client:
 
     def analyze_requirements(
             self,
-            user_prompt: str
+            user_prompt: str,
+            max_features: int = 30
     ) -> List[Dict]:
         """
-        分析用户需求，生成功能列表
+        分析用户需求，生成功能列表（优化版）
 
         Args:
             user_prompt: 用户的原始需求描述
+            max_features: 最大功能数量（默认 30，避免超时）
 
         Returns:
             功能列表，每个功能包含：
@@ -311,11 +313,11 @@ class GLM5Client:
         """
         system_prompt = """你是一个专业的产品经理和技术架构师 AI。
 
-任务：将用户的需求分解为 200+ 个细粒度的、可测试的功能。
+任务：将用户的需求分解为细粒度的、可测试的功能。
 
 每个功能应该：
 1. 聚焦于单个用户行为或系统功能
-2. 包含清晰的 E2E 测试步骤
+2. 包含清晰的 E2E 测试步骤（1-3 个具体步骤）
 3. 有明确的优先级
 4. 标注依赖关系
 
@@ -323,12 +325,11 @@ class GLM5Client:
 
 分类：
 - setup: 项目设置和配置
-- auth: 认证和授权
 - ui: 用户界面组件
-- api: API 端点
-- database: 数据模型和操作
+- data: 数据结构和状态管理
+- api: API 端点和业务逻辑
 - testing: 测试相关
-- deployment: 部署和运维
+- style: 样式和布局
 
 优先级：
 - critical: 核心功能，没有它应用无法使用
@@ -348,8 +349,8 @@ class GLM5Client:
 {user_prompt}
 
 要求：
-1. 生成 200+ 个功能
-2. 每个功能都包含 E2E 测试步骤
+1. 生成 {max_features} 个左右的功能（不必超过）
+2. 每个功能都包含 E2E 测试步骤（1-3 步）
 3. 使用 JSON 格式输出
 4. 功能 ID 按分类和编号命名"""
             }
@@ -358,7 +359,7 @@ class GLM5Client:
         response = self.chat_completion(
             messages=messages,
             temperature=0.5,
-            max_tokens=16384  # 功能列表可能很长
+            max_tokens=8192  # 减少 token 数量，避免超时
         )
 
         if response.get("error"):

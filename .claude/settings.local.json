@@ -7,7 +7,15 @@
       "Bash(/Users/ian/Projects/MyProjects/ai-developer-system/.gitignore << 'EOF'\n# AI Developer System - Git Ignore\n\n# Python\n__pycache__/\n*.py[cod]\n*$py.class\n*.so\n.Python\nbuild/\ndevelop-eggs/\ndist/\ndownloads/\neggs/\n.eggs/\nlib/\nlib64/\nparts/\nsdist/\nvar/\nwheels/\n*.egg-info/\n.installed.cfg\n*.egg\n\n# Virtual Environment\nvenv/\nENV/\n.venv\n\n# IDE\n.vscode/\n.idea/\n*.swp\n*.swo\n*~\n\n# OS\n.DS_Store\nThumbs.db\n\n# Project specific\nworkspace/\nlogs/\n*.log\n.claude/checkpoints/\n\n# Environment\n.env\n.env.local\n.env.*.local\nEOF)",
       "Bash(python3:*)",
       "Bash(git init:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(cat:*)",
+      "Bash(curl:*)",
+      "Bash(echo:*)",
+      "Bash(source:*)",
+      "Bash(env:*)",
+      "Bash(./workspace/demo-todo-app/user_prompt.txt << 'EOF'\n构建一个简单的待办事项应用（Todo App）：\n\n功能需求：\n1. 用户可以添加新的待办事项\n2. 用户可以标记待办为完成状态\n3. 用户可以删除待办事项\n4. 用户可以按状态筛选待办（全部/未完成/已完成）\n5. 使用 localStorage 持久化数据\n\n技术栈：\n- 前端框架：Next.js + TypeScript\n- 样式：Tailwind CSS\n- 状态管理：React Hooks \\(useState, useEffect\\)\n- 数据持久化：localStorage\nEOF)",
+      "Bash(git -C ./workspace/demo-todo-app log --oneline -5)"
     ]
   }
 }

@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 from datetime import datetime
 
-from llm_clients import GLM5Client, get_llm_client
+from .llm_clients import GLM5Client, get_llm_client
 
 
 class EnhancedCodingAgent:
