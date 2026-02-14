@@ -132,53 +132,55 @@ class InitializerAgent:
         """
         将用户需求扩展为详细功能列表
 
-        这里是一个简化版本。实际实现应该：
-        1. 使用 Claude API 分析需求
-        2. 分解为 200+ 个细粒度功能
-        3. 按优先级排序
-        4. 添加依赖关系
-
-        示例输出：
-        {
-            "id": "auth-login-001",
-            "category": "authentication",
-            "priority": "critical",
-            "description": "User can enter credentials and successfully log in",
-            "steps": [...],
-            "passes": false,
-            "dependencies": []
-        }
+        使用 GLM-5 API 智能分析需求并生成 200+ 功能
         """
-        # 简化示例 - 实际应该调用 LLM
-        return [
-            {
-                "id": "setup-env-001",
-                "category": "setup",
-                "priority": "critical",
-                "description": "Project dependencies are installed",
-                "steps": [
-                    "Check package.json exists",
-                    "Run npm install",
-                    "Verify node_modules created"
-                ],
-                "passes": False,
-                "dependencies": []
-            },
-            {
-                "id": "setup-devserver-001",
-                "category": "setup",
-                "priority": "critical",
-                "description": "Development server starts successfully",
-                "steps": [
-                    "Run init.sh script",
-                    "Wait for server to start",
-                    "Verify server is responding"
-                ],
-                "passes": False,
-                "dependencies": ["setup-env-001"]
-            },
-            # ... 实际应该有 200+ 个功能
-        ]
+        try:
+            from .llm_clients import GLM5Client
+
+            print(f"[Initializer] Using GLM-5 API to generate features...")
+
+            # 创建 GLM-5 客户端
+            glm_client = GLM5Client()
+
+            # 调用 API 生成功能列表
+            features = glm_client.analyze_requirements(prompt)
+
+            print(f"[Initializer] ✅ Generated {len(features)} features using GLM-5")
+            return features
+
+        except Exception as e:
+            print(f"[Initializer] ⚠️  GLM-5 feature generation failed: {e}")
+            print(f"[Initializer] Falling back to basic feature generation")
+
+            # Fallback 到基础功能列表
+            return [
+                {
+                    "id": "setup-env-001",
+                    "category": "setup",
+                    "priority": "critical",
+                    "description": "Project dependencies are installed",
+                    "steps": [
+                        "Check package.json exists",
+                        "Run npm install",
+                        "Verify node_modules created"
+                    ],
+                    "passes": False,
+                    "dependencies": []
+                },
+                {
+                    "id": "setup-devserver-001",
+                    "category": "setup",
+                    "priority": "critical",
+                    "description": "Development server starts successfully",
+                    "steps": [
+                        "Run init.sh script",
+                        "Wait for server to start",
+                        "Verify server is responding"
+                    ],
+                    "passes": False,
+                    "dependencies": ["setup-env-001"]
+                }
+            ]
 
     def _create_init_script(self) -> str:
         """
