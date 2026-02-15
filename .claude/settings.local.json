@@ -19,7 +19,26 @@
       "Bash(git -C ./workspace/demo-todo-app log --oneline -10)",
       "Bash(git -C ./workspace/demo-todo-app diff --stat HEAD~2..HEAD)",
       "Bash(npm install:*)",
-      "Bash(npx puppeteer browsers install:*)"
+      "Bash(npx puppeteer browsers install:*)",
+      "Bash(git config:*)",
+      "Bash(git remote add origin:*)",
+      "Bash(git push:*)",
+      "Bash(brew:*)",
+      "Bash(gh auth login:*)",
+      "Bash(gh auth:*)",
+      "Bash(gh repo create:*)",
+      "Bash(git remote remove:*)",
+      "Bash(GIT_ASKPASS=gh git credential approve:*)",
+      "Bash(npm create next-app@latest:*)",
+      "Bash(npm init:*)",
+      "Bash(tmux:*)",
+      "Bash(lsof:*)",
+      "Bash(public/index.html << 'EOF'\n<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"UTF-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n  <title>Todo App - Demo</title>\n  <style>\n    * {\n      margin: 0;\n      padding: 0;\n      box-sizing: border-box;\n    }\n    body {\n      font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif;\n      background: linear-gradient\\(135deg, #667eea 0%, #764ba2 100%\\);\n      min-height: 100vh;\n      display: flex;\n      align-items: center;\n      justify-content: center;\n      padding: 20px;\n    }\n    .container {\n      max-width: 800px;\n      width: 100%;\n      background: white;\n      border-radius: 12px;\n      box-shadow: 0 20px 60px rgba\\(0, 0, 0, 0.3\\);\n      padding: 40px;\n    }\n    h1 {\n      color: #333;\n      margin-bottom: 10px;\n    }\n    .status {\n      padding: 20px;\n      border-radius: 8px;\n      background: #f7f7f7;\n      border-left: 4px solid #4CAF50;\n      margin-bottom: 20px;\n    }\n    .status-title {\n      font-weight: bold;\n      color: #333;\n      margin-bottom: 10px;\n    }\n    .features {\n      display: grid;\n      grid-template-columns: repeat\\(auto-fit, minmax\\(250px, 1fr\\)\\);\n      gap: 15px;\n      margin-top: 20px;\n    }\n    .feature {\n      padding: 15px;\n      border: 1px solid #e0e0e0;\n      border-radius: 6px;\n      background: #fafafa;\n    }\n    .feature-title {\n      font-weight: 600;\n      color: #444;\n      margin-bottom: 5px;\n    }\n    .feature-desc {\n      color: #666;\n      font-size: 14px;\n    }\n    .tech-stack {\n      margin-top: 30px;\n      padding-top: 20px;\n      border-top: 1px solid #e0e0e0;\n    }\n    .tech-stack h2 {\n      font-size: 18px;\n      margin-bottom: 10px;\n      color: #333;\n    }\n    .tech-items {\n      display: flex;\n      flex-wrap: wrap;\n      gap: 10px;\n    }\n    .tech-badge {\n      display: inline-block;\n      padding: 6px 12px;\n      background: #3B82F6;\n      color: white;\n      border-radius: 20px;\n      font-size: 13px;\n      font-weight: 500;\n    }\n    .footer {\n      margin-top: 30px;\n      text-align: center;\n      color: #666;\n      font-size: 14px;\n    }\n    .success {\n      color: #28a745;\n      font-weight: bold;\n    }\n    a {\n      color: #3B82F6;\n      text-decoration: none;\n    }\n    a:hover {\n      text-decoration: underline;\n    }\n  </style>\n</head>\n<body>\n  <div class=\"container\">\n    <h1>🚀 Todo App - Demo Project</h1>\n    \n    <div class=\"status\">\n      <div class=\"status-title\">✅ Development Server Status</div>\n      <p>Next.js development server is running successfully on <strong>port 3000</strong></p>\n      <p style=\"margin-top: 15px;\">You can access the application at:</p>\n      <a href=\"http://localhost:3000\" target=\"_blank\" style=\"font-size: 18px; color: #3B82F6;\">http://localhost:3000</a>\n    </div>\n\n    <div class=\"features\">\n      <div class=\"feature\">\n        <div class=\"feature-title\">📋 Project Status</div>\n        <div class=\"feature-desc\">2/30 features completed \\(6.7%\\)</div>\n      </div>\n      <div class=\"feature\">\n        <div class=\"feature-title\">🎯 Completed</div>\n        <div class=\"feature-desc\">Setup init, Data model types</div>\n      </div>\n      <div class=\"feature\">\n        <div class=\"feature-title\">⏳ Pending</div>\n        <div class=\"feature-desc\">28 features including UI, API, Testing, Styling</div>\n      </div>\n    </div>\n\n    <div class=\"tech-stack\">\n      <h2>🛠️ Tech Stack</h2>\n      <div class=\"tech-items\">\n        <span class=\"tech-badge\">Next.js 16</span>\n        <span class=\"tech-badge\">TypeScript</span>\n        <span class=\"tech-badge\">Tailwind CSS</span>\n        <span class=\"tech-badge\">React Hooks</span>\n        <span class=\"tech-badge\">localStorage</span>\n      </div>\n    </div>\n\n    <div class=\"footer\">\n      <p class=\"success\">✨ Powered by AI Developer System with GLM-5 Integration</p>\n      <p>📦 <strong>GitHub Repository:</strong> <a href=\"https://github.com/IanAIbyte/ai-developer-system\" target=\"_blank\">github.com/IanAIbyte/ai-developer-system</a></p>\n    </div>\n  </div>\n</body>\n</html>\nEOF)",
+      "Bash(exec npx:*)",
+      "Bash(pkill:*)",
+      "Bash(python:*)",
+      "Bash(PYTHONPATH=/Users/ian/Projects/MyProjects/ai-developer-system python3:*)",
+      "Bash(git checkout:*)"
     ]
   }
 }

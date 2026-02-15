@@ -202,12 +202,13 @@ class CodingAgent:
 
     def _select_next_feature(self, context: Dict) -> Optional[Dict]:
         """
-        选择下一个要实现的功能
+        选择下一个要实现的功能（基于依赖图的拓扑排序）
 
         策略：
         1. 找到所有 passes=false 的功能
-        2. 检查依赖关系
+        2. 检查依赖关系（拓扑排序）
         3. 选择最高优先级且依赖已满足的功能
+        4. 检测循环依赖
         """
         feature_list = context["feature_list"]["features"]
 
@@ -226,16 +227,63 @@ class CodingAgent:
             key=lambda f: (priority_order.get(f.get("priority", "medium"), 0), f["id"])
         )
 
+        print(f"    → Pending features: {len(pending_features)}")
+
         # 选择第一个依赖已满足的功能
+        blocked_features = []
         for feature in pending_features:
-            if self._check_dependencies(feature, feature_list):
+            deps_status = self._check_dependencies(feature, feature_list)
+
+            if deps_status["satisfied"]:
+                # 依赖已满足
+                if deps_status["dependencies"]:
+                    print(f"    → {feature['id']}: dependencies satisfied: {deps_status['dependencies']}")
                 return feature
+            else:
+                # 依赖未满足，记录原因
+                blocked_features.append({
+                    "id": feature["id"],
+                    "priority": feature.get("priority", "medium"),
+                    "waiting_for": deps_status["missing_deps"],
+                    "reason": deps_status["reason"]
+                })
+
+        # 所有功能都被阻塞，显示详细原因
+        if blocked_features:
+            print(f"    ⚠️  All pending features are blocked by dependencies:")
+            for blocked in blocked_features[:5]:  # 只显示前 5 个
+                print(f"       - {blocked['id']} (priority: {blocked['priority']})")
+                print(f"         Waiting for: {', '.join(blocked['waiting_for'])}")
+                if blocked.get("reason"):
+                    print(f"         Reason: {blocked['reason']}")
+
+            if len(blocked_features) > 5:
+                print(f"       ... and {len(blocked_features) - 5} more")
+
+            # 检测是否存在循环依赖
+            circular_deps = self._detect_circular_dependencies(feature_list)
+            if circular_deps:
+                print(f"    ❌ Circular dependencies detected:")
+                for cycle in circular_deps:
+                    print(f"       {' → '.join(cycle)} → (cycle)")
 
         return None
 
-    def _check_dependencies(self, feature: Dict, all_features: List[Dict]) -> bool:
-        """检查功能依赖是否已满足"""
+    def _check_dependencies(self, feature: Dict, all_features: List[Dict]) -> Dict:
+        """
+        检查功能依赖是否已满足
+
+        Returns:
+            {
+                "satisfied": bool,  # 所有依赖是否都满足
+                "dependencies": List[str],  # 所有依赖 ID
+                "missing_deps": List[str],  # 未满足的依赖 ID
+                "reason": str  # 未满足的原因（如果有）
+            }
+        """
         dependencies = feature.get("dependencies", [])
+        satisfied_deps = []
+        missing_deps = []
 
         for dep_id in dependencies:
             # 找到依赖的功能
@@ -243,10 +291,164 @@ class CodingAgent:
                 (f for f in all_features if f["id"] == dep_id),
                 None
             )
-            if not dep_feature or not dep_feature.get("passes", False):
-                return False
 
-        return True
+            if not dep_feature:
+                missing_deps.append(dep_id)
+                return {
+                    "satisfied": False,
+                    "dependencies": dependencies,
+                    "missing_deps": [dep_id],
+                    "reason": f"Dependency '{dep_id}' not found in feature list"
+                }
+
+            if dep_feature.get("passes", False):
+                satisfied_deps.append(dep_id)
+            else:
+                missing_deps.append(dep_id)
+
+        if missing_deps:
+            return {
+                "satisfied": False,
+                "dependencies": dependencies,
+                "missing_deps": missing_deps,
+                "reason": f"Waiting for {len(missing_deps)} dependencies to complete"
+            }
+
+        return {
+            "satisfied": True,
+            "dependencies": satisfied_deps,
+            "missing_deps": [],
+            "reason": None
+        }
+
+    def _detect_circular_dependencies(self, all_features: List[Dict]) -> List[List[str]]:
+        """
+        检测循环依赖（使用深度优先搜索）
+
+        Returns:
+            循环依赖列表，每个循环是一个 feature ID 列表
+        """
+        # 构建依赖图
+        graph = {}
+        for feature in all_features:
+            graph[feature["id"]] = feature.get("dependencies", [])
+
+        # 检测循环
+        visited = set()
+        rec_stack = set()
+        cycles = []
+
+        def dfs(node: str, path: List[str]):
+            visited.add(node)
+            rec_stack.add(node)
+            path.append(node)
+
+            for neighbor in graph.get(node, []):
+                if neighbor not in visited:
+                    result = dfs(neighbor, path.copy())
+                    if result:
+                        cycles.append(result)
+                elif neighbor in rec_stack:
+                    # 找到循环
+                    cycle_start = path.index(neighbor)
+                    cycle = path[cycle_start:] + [neighbor]
+                    cycles.append(cycle)
+
+            rec_stack.remove(node)
+            return None
+
+        for node in graph:
+            if node not in visited:
+                dfs(node, [])
+
+        return cycles
+
+    def _visualize_dependency_graph(self, all_features: List[Dict]) -> str:
+        """
+        可视化依赖图结构（用于调试）
+
+        Returns:
+            文本形式的依赖图
+        """
+        lines = []
+        lines.append("\n=== Dependency Graph Visualization ===")
+
+        # 按状态分组
+        completed = [f for f in all_features if f.get("passes", False)]
+        pending = [f for f in all_features if not f.get("passes", False)]
+
+        lines.append(f"\n✅ Completed ({len(completed)}):")
+        for f in completed:
+            deps = f.get("dependencies", [])
+            if deps:
+                lines.append(f"  {f['id']} (priority: {f.get('priority', 'medium')})")
+                lines.append(f"    ← depends on: {', '.join(deps)}")
+            else:
+                lines.append(f"  {f['id']} (priority: {f.get('priority', 'medium')}) - no dependencies")
+
+        lines.append(f"\n⏳ Pending ({len(pending)}):")
+        for f in pending:
+            deps = f.get("dependencies", [])
+            status = self._check_dependencies(f, all_features)
+
+            if status["satisfied"]:
+                lines.append(f"  ✓ {f['id']} (priority: {f.get('priority', 'medium')}) - ready to implement")
+            else:
+                lines.append(f"  ✗ {f['id']} (priority: {f.get('priority', 'medium')}) - blocked")
+                if status["missing_deps"]:
+                    lines.append(f"    ← missing: {', '.join(status['missing_deps'])}")
+
+        lines.append("\n" + "=" * 40)
+        return "\n".join(lines)
+
+    def _export_dependency_graph_dot(self, all_features: List[Dict], output_path: str = None) -> str:
+        """
+        导出依赖图为 DOT 格式（可用 Graphviz 可视化）
+
+        Args:
+            all_features: 功能列表
+            output_path: 输出文件路径（可选）
+
+        Returns:
+            DOT 格式的依赖图字符串
+        """
+        dot_lines = ["digraph FeatureDependencies {"]
+        dot_lines.append("  rankdir=TB;")
+        dot_lines.append("  node [shape=box, style=rounded];")
+        dot_lines.append("")
+
+        # 按状态分组节点
+        completed = [f for f in all_features if f.get("passes", False)]
+        pending = [f for f in all_features if not f.get("passes", False)]
+
+        # 添加节点
+        for f in completed:
+            label = f"{f['id']}\\n({f.get('priority', 'medium')})"
+            dot_lines.append(f"  \"{f['id']}\" [label=\"{label}\", style=\"rounded,filled\", fillcolor=lightgray];")
+
+        for f in pending:
+            label = f"{f['id']}\\n({f.get('priority', 'medium')})"
+            dot_lines.append(f"  \"{f['id']}\" [label=\"{label}\", style=\"rounded,filled\", fillcolor=lightblue];")
+
+        dot_lines.append("")
+
+        # 添加边（依赖关系）
+        for f in all_features:
+            deps = f.get("dependencies", [])
+            for dep_id in deps:
+                dot_lines.append(f"  \"{dep_id}\" -> \"{f['id']}\";")
+
+        dot_lines.append("}")
+
+        dot_content = "\n".join(dot_lines)
+
+        # 如果指定了输出路径，保存到文件
+        if output_path:
+            with open(output_path, 'w', encoding='utf-8') as f:
+                f.write(dot_content)
+            print(f"    → Dependency graph exported to: {output_path}")
+
+        return dot_content
 
     def _implement_feature(self, feature: Dict, context: Dict) -> Dict:
         """
