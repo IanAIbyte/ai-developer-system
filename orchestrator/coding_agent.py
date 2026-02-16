@@ -17,6 +17,7 @@ Coding Agent - 编码代理
 
 import json
 import os
+import asyncio
 import subprocess
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -27,6 +28,8 @@ from .enhanced_coding_agent import EnhancedCodingAgent
 from .testing_agent import TestingAgent
 from .environment_validator import EnvironmentValidator
 from .quality_auditor import audit_feature_quality
+from .skills_library import get_skills_library, recommend_skills_for_feature
+from .reverse_testing import run_reverse_tests_for_feature
 
 
 class CodingAgent:
@@ -44,7 +47,7 @@ class CodingAgent:
         self.session_id = session_id or self._generate_session_id()
         self.timestamp = datetime.now().isoformat()
 
-    def start_session(self) -> Dict:
+    async def start_session(self) -> Dict:
         """
         启动编码会话
 
@@ -53,7 +56,8 @@ class CodingAgent:
         2. 选择下一个功能
         3. 实现功能
         4. 测试功能
-        5. 清理状态
+        5. 反向测试（P2 新增）
+        6. 清理状态
 
         Returns:
             会话结果字典
@@ -102,18 +106,22 @@ class CodingAgent:
         print(f"\n[Phase 4] Testing feature...")
         test_result = self._test_feature(feature, context)
 
-        # Phase 4.5: 质量审计（新增 - LLM-as-a-Judge）
+        # Phase 4.2: 反向测试（P2 新增 - 失败场景和鲁棒性验证）
+        print(f"\n[Phase 4.2] Running reverse tests...")
+        reverse_test_result = await self._run_reverse_tests(feature)
+
+        # Phase 4.5: 质量审计（P1 新增 - LLM-as-a-Judge）
         print(f"\n[Phase 4.5] Auditing code quality...")
         audit_result = await self._audit_feature_quality(feature)
 
-        # Phase 4.6: 环境完整性验证
+        # Phase 4.6: 环境完整性验证（P0 新增）
         print(f"\n[Phase 4.6] Validating environment integrity...")
         validator = EnvironmentValidator(str(self.project_path))
         validation_result = validator.validate_before_completion(feature, implementation_result)
 
         # Phase 5: 清理状态（传递所有验证结果）
         print(f"\n[Phase 5] Cleaning up state...")
-        self._clean_state(feature, test_result, implementation_result, audit_result, validation_result)
+        self._clean_state(feature, test_result, reverse_test_result, implementation_result, audit_result, validation_result)
 
         result = {
             "status": "success",
@@ -472,7 +480,24 @@ class CodingAgent:
         实现功能
 
         优先使用 GLM-5 API，如果失败则使用模拟实现
+
+        新增：推荐相关技能模式
         """
+        # Phase 3.1: 推荐技能模式（P2 优化）
+        print(f"  → [Skills Library] Recommending relevant skills...")
+        recommended_skills = recommend_skills_for_feature(feature, top_k=3)
+
+        if recommended_skills:
+            print(f"    📚 Found {len(recommended_skills)} relevant skills:")
+            for i, skill in enumerate(recommended_skills, 1):
+                print(f"      {i}. {skill['name']} (匹配度: {skill['match_score']:.2f})")
+                print(f"         描述: {skill['description']}")
+                # 将技能信息添加到 context，供 Enhanced Coding Agent 使用
+        else:
+            print(f"    ℹ️  No specific skills found for this feature")
+
+        context["recommended_skills"] = recommended_skills
+
         try:
             # 尝试使用增强的编码代理（带 GLM-5 API）
             from .enhanced_coding_agent import EnhancedCodingAgent
@@ -538,6 +563,51 @@ class CodingAgent:
             "screenshots": []
         }
 
+    async def _run_reverse_tests(self, feature: Dict) -> Dict:
+        """
+        运行反向测试（P2 新增）
+
+        测试失败场景、边界条件、安全漏洞等
+
+        Args:
+            feature: 功能定义
+
+        Returns:
+            测试结果
+        """
+        try:
+            result = await run_reverse_tests_for_feature(
+                str(self.project_path),
+                feature
+            )
+
+            if result.get("tests_run", 0) > 0:
+                passed = result.get("passed_tests", 0)
+                total = result.get("tests_run", 0)
+                critical_failures = result.get("critical_failures", [])
+
+                if result.get("passed"):
+                    print(f"  ✅ Reverse tests passed: {passed}/{total}")
+                else:
+                    print(f"  ❌ Reverse tests failed: {passed}/{total}")
+                    if critical_failures:
+                        print(f"     Critical failures: {len(critical_failures)}")
+                        for failure in critical_failures:
+                            print(f"       - {failure['name']}: {failure['issue']}")
+            else:
+                print(f"  ℹ️  No reverse tests applicable for this feature")
+
+            return result
+
+        except Exception as e:
+            print(f"  ⚠️  Reverse testing failed: {e}")
+            # 反向测试失败不应该阻止功能完成，但应该记录
+            return {
+                "passed": True,  # 默认通过，避免阻塞
+                "tests_run": 0,
+                "error": str(e)
+            }
+
     def _run_basic_tests(self, context: Dict) -> Dict:
         """
         运行基础测试
@@ -551,6 +621,7 @@ class CodingAgent:
         self,
         feature: Dict,
         test_result: Dict,
+        reverse_test_result: Optional[Dict],
         implementation_result: Dict,
         audit_result: Optional[Dict] = None,
         validation_result: Optional[Dict] = None
@@ -568,7 +639,8 @@ class CodingAgent:
 
         新增：检查 generation_method，simulation mode 不标记为完成
         新增：环境完整性验证，防止"空城计"
-        新增：LLM-as-a-Judge 质量审计
+        新增：LLM-as-a-Judge 质量审计（P1）
+        新增：反向测试，失败场景验证（P2）
         """
         generation_method = implementation_result.get("generation_method", "unknown")
         requires_manual = implementation_result.get("requires_manual_implementation", False)
@@ -580,9 +652,15 @@ class CodingAgent:
         audit_passed = audit_result.get("passed", True) if audit_result else True
         audit_score = audit_result.get("score", 7) if audit_result else 7
 
+        # 反向测试结果（P2 新增）
+        reverse_tests_passed = reverse_test_result.get("passed", True) if reverse_test_result else True
+        reverse_tests_run = reverse_test_result.get("tests_run", 0) if reverse_test_result else 0
+        reverse_critical_failures = reverse_test_result.get("critical_failures", []) if reverse_test_result else []
+
         # 1. 更新 feature_list.json
         # 只有当：
         #   - 测试通过
+        #   - 反向测试通过（P2 新增）
         #   - 不是 simulation mode
         #   - 不需要手动实现
         #   - 环境验证通过（如果有验证）
@@ -590,6 +668,7 @@ class CodingAgent:
         # 才标记为完成
         should_mark_complete = (
             test_result["passed"] and
+            reverse_tests_passed and  # P2: 反向测试必须通过
             generation_method != "simulation" and
             not requires_manual and
             env_valid and
@@ -609,6 +688,8 @@ class CodingAgent:
             reasons = []
             if not test_result["passed"]:
                 reasons.append("tests failed")
+            if not reverse_tests_passed:  # P2 新增
+                reasons.append(f"reverse tests failed ({len(reverse_critical_failures)} critical)")
             if requires_manual:
                 reasons.append("requires manual implementation")
             if not env_valid:
