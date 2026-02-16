@@ -97,9 +97,14 @@ class CodingAgent:
         print(f"\n[Phase 4] Testing feature...")
         test_result = self._test_feature(feature, context)
 
-        # Phase 5: 清理状态（传递 implementation_result）
+        # Phase 4.5: 环境完整性验证（新增）
+        print(f"\n[Phase 4.5] Validating environment integrity...")
+        validator = EnvironmentValidator(str(self.project_path))
+        validation_result = validator.validate_before_completion(feature, implementation_result)
+
+        # Phase 5: 清理状态（传递 implementation_result 和 validation_result）
         print(f"\n[Phase 5] Cleaning up state...")
-        self._clean_state(feature, test_result, implementation_result)
+        self._clean_state(feature, test_result, implementation_result, validation_result)
 
         result = {
             "status": "success",
@@ -533,7 +538,13 @@ class CodingAgent:
         # TODO: 实际实现应该运行测试套件
         return {"passed": True}
 
-    def _clean_state(self, feature: Dict, test_result: Dict, implementation_result: Dict):
+    def _clean_state(
+        self,
+        feature: Dict,
+        test_result: Dict,
+        implementation_result: Dict,
+        validation_result: Optional[Dict] = None
+    ):
         """
         清理状态 - 关键步骤！
 
@@ -546,16 +557,26 @@ class CodingAgent:
         如果测试失败，不要标记为通过，先修复 bug
 
         新增：检查 generation_method，simulation mode 不标记为完成
+        新增：环境完整性验证，防止"空城计"
         """
         generation_method = implementation_result.get("generation_method", "unknown")
         requires_manual = implementation_result.get("requires_manual_implementation", False)
 
+        # 环境验证结果
+        env_valid = validation_result.get("passed", True) if validation_result else True
+
         # 1. 更新 feature_list.json
-        # 只有当测试通过 且 不是 simulation mode 时，才标记为完成
+        # 只有当：
+        #   - 测试通过
+        #   - 不是 simulation mode
+        #   - 不需要手动实现
+        #   - 环境验证通过（如果有验证）
+        # 才标记为完成
         should_mark_complete = (
             test_result["passed"] and
             generation_method != "simulation" and
-            not requires_manual
+            not requires_manual and
+            env_valid
         )
 
         if should_mark_complete:
@@ -566,25 +587,37 @@ class CodingAgent:
                 generation_method=generation_method
             )
         else:
+            # 确定失败原因
+            reasons = []
+            if not test_result["passed"]:
+                reasons.append("tests failed")
             if requires_manual:
-                print("  → ⚠️  Feature requires manual implementation (not marking as complete)")
-                self._update_feature_status(
-                    feature["id"],
-                    passes=False,
-                    generation_method=generation_method,
-                    requires_manual_implementation=True
-                )
-            else:
-                print("  → Updating feature_list.json (not complete yet)")
-                self._update_feature_status(
-                    feature["id"],
-                    passes=False,
-                    generation_method=generation_method
-                )
+                reasons.append("requires manual implementation")
+            if not env_valid:
+                reasons.append("environment validation failed")
+            if generation_method == "simulation":
+                reasons.append("simulation mode")
+
+            reason_str = ", ".join(reasons)
+            print(f"  → ⚠️  Not marking complete: {reason_str}")
+
+            self._update_feature_status(
+                feature["id"],
+                passes=False,
+                generation_method=generation_method,
+                requires_manual_implementation=requires_manual,
+                validation_passed=env_valid,
+                validation_details=validation_result.get("checks", {}) if validation_result else {}
+            )
 
         # 2. 更新 claude-progress.txt
         print("  → Updating claude-progress.txt")
-        self._append_to_progress_file(feature, test_result, implementation_result)
+        self._append_to_progress_file(
+            feature,
+            test_result,
+            implementation_result,
+            validation_result
+        )
 
         # 3. Git commit（只在真正完成时）
         if should_mark_complete:
@@ -666,13 +699,15 @@ Please review the implementation guide in src/features/{feature['id']}/
         self,
         feature: Dict,
         test_result: Dict,
-        implementation_result: Dict
+        implementation_result: Dict,
+        validation_result: Dict
     ):
         """追加进度到 claude-progress.txt"""
         progress_path = self.project_path / "claude-progress.txt"
 
         status_icon = "✅" if test_result["passed"] else "❌"
         generation_method = implementation_result.get("generation_method", "unknown")
+        env_valid = validation_result.get("passed", True)
 
         # 根据生成方法添加不同的图标
         if generation_method == "simulation":
@@ -685,6 +720,10 @@ Please review the implementation guide in src/features/{feature['id']}/
             method_icon = "📝 "
             method_text = generation_method
 
+        # 环境验证结果
+        env_icon = "✅" if env_valid else "❌"
+        env_text = "Passed" if env_valid else "Failed"
+
         new_entry = f"""
 
 [Session {self.session_id}] Coding Agent
@@ -693,10 +732,12 @@ Feature: {feature['id']}
 Description: {feature['description']}
 Status: {status_icon} {'PASS' if test_result['passed'] else 'FAIL'}
 Generation Method: {method_icon} {method_text}
+Environment Validation: {env_icon} {env_text}
 
 Changes:
 - Implemented feature
 - Tested with E2E automation
+- Validated environment integrity
 - Updated feature_list.json
 
 """
