@@ -13,6 +13,15 @@ import httpx
 from typing import Dict, List, Optional, Any
 from pathlib import Path
 
+# 自动加载 .env 文件
+try:
+    from dotenv import load_dotenv
+    # 尝试从当前目录和工作目录加载 .env
+    load_dotenv()
+    load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
+except ImportError:
+    pass  # 如果没有安装 python-dotenv，忽略
+
 
 class GLM5Client:
     """
@@ -91,7 +100,8 @@ class GLM5Client:
             tools: Optional[List[Dict]] = None,
             temperature: float = 0.7,
             max_tokens: int = 4096,
-            stream: bool = False
+            stream: bool = False,
+            show_progress: bool = False
     ) -> Dict:
         """
         调用 GLM 通用对话补全 API
@@ -105,6 +115,7 @@ class GLM5Client:
             temperature: 温度参数 (0-1)
             max_tokens: 最大 token 数
             stream: 是否流式输出
+            show_progress: 是否显示进度信息
 
         Returns:
             API 响应字典
@@ -121,9 +132,19 @@ class GLM5Client:
             payload["tools"] = tools
 
         try:
+            if show_progress:
+                import sys
+                import time
+                print("[GLM-5] Sending request to API...", file=sys.stderr, flush=True)
+                start_time = time.time()
+
             # 使用通用 API 端点
             response = self.client_general.post("", json=payload)
             response.raise_for_status()
+
+            if show_progress:
+                elapsed = time.time() - start_time
+                print(f"[GLM-5] Response received in {elapsed:.1f}s", file=sys.stderr, flush=True)
 
             if stream:
                 # 流式响应
@@ -290,14 +311,16 @@ class GLM5Client:
     def analyze_requirements(
             self,
             user_prompt: str,
-            max_features: int = 30
+            max_features: int = 30,
+            show_progress: bool = True
     ) -> List[Dict]:
         """
-        分析用户需求，生成功能列表（优化版）
+        分析用户需求，生成功能列表
 
         Args:
             user_prompt: 用户的原始需求描述
-            max_features: 最大功能数量（默认 30，避免超时）
+            max_features: 最大功能数量（默认 30）
+            show_progress: 是否显示进度信息
 
         Returns:
             功能列表，每个功能包含：
@@ -377,7 +400,8 @@ class GLM5Client:
         response = self.chat_completion(
             messages=messages,
             temperature=0.5,
-            max_tokens=8192  # 减少 token 数量，避免超时
+            max_tokens=8192,  # 减少 token 数量，避免超时
+            show_progress=show_progress
         )
 
         if response.get("error"):
