@@ -10,6 +10,7 @@ Enhanced Coding Agent - 增强的编码代理（集成 GLM-5 API）
 
 import json
 import os
+import time
 from pathlib import Path
 from typing import Dict, List, Optional
 from datetime import datetime
@@ -43,10 +44,15 @@ class EnhancedCodingAgent:
         self.session_id = session_id or self._generate_session_id()
         self.timestamp = datetime.now().isoformat()
 
+        # 配置重试参数
+        self.max_retries = int(os.getenv("LLM_MAX_RETRIES", "3"))
+        self.retry_delay = int(os.getenv("LLM_RETRY_DELAY", "5"))
+
         # 初始化 LLM 客户端
         try:
             self.llm_client = get_llm_client(llm_provider)
             print(f"[EnhancedCodingAgent] Using {llm_provider.upper()} for code generation")
+            print(f"[EnhancedCodingAgent] Max retries: {self.max_retries}, Retry delay: {self.retry_delay}s")
         except Exception as e:
             print(f"[EnhancedCodingAgent] ⚠️  LLM client initialization failed: {e}")
             print(f"[EnhancedCodingAgent] Will use simulation mode")
@@ -85,36 +91,45 @@ class EnhancedCodingAgent:
             project_structure=project_structure
         )
 
-        # 3. 调用 LLM 生成代码
-        try:
-            generated_code = self.llm_client.generate_code(
-                prompt=code_gen_prompt,
-                context=context.get("progress", ""),
-                file_structure=project_structure
-            )
+        # 3. 调用 LLM 生成代码（带重试机制）
+        for attempt in range(self.max_retries):
+            try:
+                print(f"    [GLM-5] Attempt {attempt + 1}/{self.max_retries}...")
 
-            print(f"    [GLM-5] ✅ Code generation complete ({len(generated_code)} chars)")
+                generated_code = self.llm_client.generate_code(
+                    prompt=code_gen_prompt,
+                    context=context.get("progress", ""),
+                    file_structure=project_structure
+                )
 
-            # 4. 解析并保存生成的代码
-            files_created = self._save_generated_code(
-                generated_code=generated_code,
-                feature_id=feature["id"]
-            )
+                print(f"    [GLM-5] ✅ Code generation complete ({len(generated_code)} chars)")
 
-            print(f"    [GLM-5] ✅ Created/modified {len(files_created)} files")
+                # 4. 解析并保存生成的代码
+                files_created = self._save_generated_code(
+                    generated_code=generated_code,
+                    feature_id=feature["id"]
+                )
 
-            return {
-                "success": True,
-                "files_created": files_created,
-                "generation_method": "glm-5-api",
-                "feature_id": feature["id"]
-            }
+                print(f"    [GLM-5] ✅ Created/modified {len(files_created)} files")
 
-        except Exception as e:
-            print(f"    [GLM-5] ❌ Code generation failed: {e}")
-            print(f"    [GLM-5] Falling back to simulation mode")
+                return {
+                    "success": True,
+                    "files_created": files_created,
+                    "generation_method": "glm-5-api",
+                    "feature_id": feature["id"],
+                    "attempts": attempt + 1
+                }
 
-            return self._implement_feature_simulation(feature, context)
+            except Exception as e:
+                print(f"    [GLM-5] ❌ Attempt {attempt + 1} failed: {e}")
+
+                if attempt < self.max_retries - 1:
+                    print(f"    [GLM-5] ⏳ Retrying in {self.retry_delay} seconds...")
+                    time.sleep(self.retry_delay)
+                else:
+                    print(f"    [GLM-5] ❌ All {self.max_retries} attempts exhausted")
+                    print(f"    [GLM-5] Falling back to simulation mode")
+                    return self._implement_feature_simulation(feature, context)
 
     def _analyze_project_structure(self) -> Dict:
         """分析项目结构"""
@@ -266,8 +281,14 @@ class EnhancedCodingAgent:
         return files_created
 
     def _implement_feature_simulation(self, feature: Dict, context: Dict) -> Dict:
-        """模拟实现（fallback）"""
-        print(f"    [Simulation] Implementing: {feature['description']}")
+        """
+        模拟实现（fallback）
+
+        注意：此方法只创建占位文档，不实现实际功能。
+        返回 success: False 以便系统能正确识别未完成的功能。
+        """
+        print(f"    [Simulation] Creating placeholder for: {feature['description']}")
+        print(f"    [Simulation] ⚠️  This feature requires manual implementation")
 
         # 创建模拟实现文件
         impl_dir = self.project_path / "src" / "features" / feature["id"]
@@ -275,17 +296,29 @@ class EnhancedCodingAgent:
 
         impl_file = impl_dir / "implementation.md"
         with open(impl_file, 'w', encoding='utf-8') as f:
-            f.write(f"# {feature['id']} - Implementation\n\n")
+            f.write(f"# {feature['id']} - TODO: Manual Implementation Required\n\n")
             f.write(f"## Description\n{feature['description']}\n\n")
-            f.write(f"## Steps\n")
+            f.write(f"## Category\n{feature.get('category', 'N/A')}\n\n")
+            f.write(f"## Priority\n{feature.get('priority', 'N/A')}\n\n")
+            f.write(f"## Status\n❌ **NOT IMPLEMENTED** - Requires manual implementation\n\n")
+            f.write(f"## Why This Failed\n")
+            f.write(f"- LLM API timeout or error after {self.max_retries} attempts\n")
+            f.write(f"- Fallback to simulation mode\n\n")
+            f.write(f"## Implementation Steps\n")
             for i, step in enumerate(feature.get("steps", []), 1):
                 f.write(f"{i}. {step}\n")
+            f.write(f"\n## Notes\n")
+            f.write(f"- This feature needs to be implemented manually\n")
+            f.write(f"- Please refer to the project documentation for guidance\n")
 
         return {
-            "success": True,
+            "success": False,  # ← 改为 False，表示功能未真正实现
             "files_created": [str(impl_file)],
             "generation_method": "simulation",
-            "feature_id": feature["id"]
+            "feature_id": feature["id"],
+            "requires_manual_implementation": True,  # ← 新增标记
+            "fallback_reason": "API timeout or error",  # ← 记录失败原因
+            "attempts_exhausted": self.max_retries  # ← 记录尝试次数
         }
 
     def _generate_session_id(self) -> str:

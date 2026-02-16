@@ -83,20 +83,23 @@ class CodingAgent:
 
         if not implementation_result["success"]:
             print(f"[Coding Agent] ❌ Implementation failed")
+            # 即使失败也要记录到进度文件
+            self._record_implementation_failure(feature, implementation_result)
             return {
                 "status": "failed",
                 "session_id": self.session_id,
                 "feature": feature["id"],
-                "error": implementation_result.get("error")
+                "error": implementation_result.get("error"),
+                "requires_manual_implementation": implementation_result.get("requires_manual_implementation", False)
             }
 
         # Phase 4: 测试功能
         print(f"\n[Phase 4] Testing feature...")
         test_result = self._test_feature(feature, context)
 
-        # Phase 5: 清理状态
+        # Phase 5: 清理状态（传递 implementation_result）
         print(f"\n[Phase 5] Cleaning up state...")
-        self._clean_state(feature, test_result)
+        self._clean_state(feature, test_result, implementation_result)
 
         result = {
             "status": "success",
@@ -530,7 +533,7 @@ class CodingAgent:
         # TODO: 实际实现应该运行测试套件
         return {"passed": True}
 
-    def _clean_state(self, feature: Dict, test_result: Dict):
+    def _clean_state(self, feature: Dict, test_result: Dict, implementation_result: Dict):
         """
         清理状态 - 关键步骤！
 
@@ -541,22 +544,71 @@ class CodingAgent:
         - 更新的功能列表（passes 字段）
 
         如果测试失败，不要标记为通过，先修复 bug
+
+        新增：检查 generation_method，simulation mode 不标记为完成
         """
+        generation_method = implementation_result.get("generation_method", "unknown")
+        requires_manual = implementation_result.get("requires_manual_implementation", False)
+
         # 1. 更新 feature_list.json
-        if test_result["passed"]:
-            print("  → Updating feature_list.json")
-            self._update_feature_status(feature["id"], passes=True)
+        # 只有当测试通过 且 不是 simulation mode 时，才标记为完成
+        should_mark_complete = (
+            test_result["passed"] and
+            generation_method != "simulation" and
+            not requires_manual
+        )
+
+        if should_mark_complete:
+            print("  → Updating feature_list.json (marking as complete)")
+            self._update_feature_status(
+                feature["id"],
+                passes=True,
+                generation_method=generation_method
+            )
+        else:
+            if requires_manual:
+                print("  → ⚠️  Feature requires manual implementation (not marking as complete)")
+                self._update_feature_status(
+                    feature["id"],
+                    passes=False,
+                    generation_method=generation_method,
+                    requires_manual_implementation=True
+                )
+            else:
+                print("  → Updating feature_list.json (not complete yet)")
+                self._update_feature_status(
+                    feature["id"],
+                    passes=False,
+                    generation_method=generation_method
+                )
 
         # 2. 更新 claude-progress.txt
         print("  → Updating claude-progress.txt")
-        self._append_to_progress_file(feature, test_result)
+        self._append_to_progress_file(feature, test_result, implementation_result)
 
-        # 3. Git commit
-        print("  → Creating git commit")
-        self._create_commit(feature, test_result)
+        # 3. Git commit（只在真正完成时）
+        if should_mark_complete:
+            print("  → Creating git commit")
+            self._create_commit(feature, test_result, implementation_result)
+        else:
+            print("  → Skipping git commit (feature not complete)")
 
-    def _update_feature_status(self, feature_id: str, passes: bool):
-        """更新功能的 passes 状态"""
+    def _update_feature_status(
+        self,
+        feature_id: str,
+        passes: bool,
+        generation_method: str = "unknown",
+        requires_manual_implementation: bool = False
+    ):
+        """
+        更新功能的 passes 状态
+
+        Args:
+            feature_id: 功能 ID
+            passes: 是否完成
+            generation_method: 生成方法（glm-5-api, simulation 等）
+            requires_manual_implementation: 是否需要手动实现
+        """
         feature_list_path = self.project_path / "feature_list.json"
 
         with open(feature_list_path, 'r', encoding='utf-8') as f:
@@ -565,16 +617,74 @@ class CodingAgent:
         for feature in data["features"]:
             if feature["id"] == feature_id:
                 feature["passes"] = passes
+                # 新增元数据
+                feature["generation_method"] = generation_method
+                feature["requires_manual_implementation"] = requires_manual_implementation
+
+                # 根据状态添加实现状态
+                if requires_manual_implementation:
+                    feature["implementation_status"] = "requires_manual"
+                elif passes:
+                    feature["implementation_status"] = "complete"
+                else:
+                    feature["implementation_status"] = "in_progress"
                 break
 
         with open(feature_list_path, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
 
-    def _append_to_progress_file(self, feature: Dict, test_result: Dict):
+    def _record_implementation_failure(self, feature: Dict, implementation_result: Dict):
+        """记录实现失败的情况"""
+        progress_path = self.project_path / "claude-progress.txt"
+
+        generation_method = implementation_result.get("generation_method", "unknown")
+        requires_manual = implementation_result.get("requires_manual_implementation", False)
+
+        new_entry = f"""
+
+[Session {self.session_id}] Coding Agent - IMPLEMENTATION FAILED
+Timestamp: {self.timestamp}
+Feature: {feature['id']}
+Description: {feature['description']}
+Status: ❌ FAIL
+Generation Method: {generation_method}
+Requires Manual Implementation: {requires_manual}
+
+Error Details:
+- API attempts exhausted after {implementation_result.get('attempts_exhausted', 'N/A')} tries
+- Fallback reason: {implementation_result.get('fallback_reason', 'Unknown')}
+
+⚠️  This feature needs to be implemented manually!
+Please review the implementation guide in src/features/{feature['id']}/
+
+"""
+
+        with open(progress_path, 'a', encoding='utf-8') as f:
+            f.write(new_entry)
+
+    def _append_to_progress_file(
+        self,
+        feature: Dict,
+        test_result: Dict,
+        implementation_result: Dict
+    ):
         """追加进度到 claude-progress.txt"""
         progress_path = self.project_path / "claude-progress.txt"
 
         status_icon = "✅" if test_result["passed"] else "❌"
+        generation_method = implementation_result.get("generation_method", "unknown")
+
+        # 根据生成方法添加不同的图标
+        if generation_method == "simulation":
+            method_icon = "⚠️ "
+            method_text = "SIMULATION MODE - Requires manual implementation"
+        elif generation_method == "glm-5-api":
+            method_icon = "🤖 "
+            method_text = "GLM-5 API Generated"
+        else:
+            method_icon = "📝 "
+            method_text = generation_method
+
         new_entry = f"""
 
 [Session {self.session_id}] Coding Agent
@@ -582,20 +692,19 @@ Timestamp: {self.timestamp}
 Feature: {feature['id']}
 Description: {feature['description']}
 Status: {status_icon} {'PASS' if test_result['passed'] else 'FAIL'}
+Generation Method: {method_icon} {method_text}
 
 Changes:
 - Implemented feature
 - Tested with E2E automation
 - Updated feature_list.json
 
-Git commit: feat: {feature['id']} - {feature['description']}
-
 """
 
         with open(progress_path, 'a', encoding='utf-8') as f:
             f.write(new_entry)
 
-    def _create_commit(self, feature: Dict, test_result: Dict):
+    def _create_commit(self, feature: Dict, test_result: Dict, implementation_result: Dict):
         """创建 git commit"""
         # Add all changes
         subprocess.run(
@@ -607,6 +716,8 @@ Git commit: feat: {feature['id']} - {feature['description']}
 
         # Create commit
         status_text = "PASS" if test_result["passed"] else "FAIL"
+        generation_method = implementation_result.get("generation_method", "unknown")
+
         commit_message = f"""feat: {feature['id']} - {feature['description']}
 
 Implemented by AI Developer System Coding Agent (Session {self.session_id})
@@ -614,12 +725,14 @@ Implemented by AI Developer System Coding Agent (Session {self.session_id})
 Feature ID: {feature['id']}
 Category: {feature.get('category', 'unknown')}
 Status: {status_text}
+Generation Method: {generation_method}
 Timestamp: {self.timestamp}
 
 Changes:
 - Feature implementation
 - E2E testing completed
 - Progress updated
+- Feature marked as complete
 """
 
         subprocess.run(

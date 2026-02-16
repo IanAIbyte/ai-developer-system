@@ -74,6 +74,10 @@ class GLM5Client:
                 "environment variable or pass api_key parameter."
             )
 
+        # 从环境变量读取超时配置
+        timeout_general = float(os.getenv("GLM5_TIMEOUT", "90"))
+        timeout_coding = float(os.getenv("GLM5_CODING_TIMEOUT", "120"))
+
         # 通用 API 客户端（用于对话、需求分析等）
         self.client_general = httpx.Client(
             base_url=self.API_GENERAL,
@@ -81,7 +85,7 @@ class GLM5Client:
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json"
             },
-            timeout=300.0  # 增加到 5 分钟，避免超时
+            timeout=timeout_general
         )
 
         # Coding API 客户端（仅用于代码生成）
@@ -91,7 +95,7 @@ class GLM5Client:
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json"
             },
-            timeout=180.0  # Coding API 可能需要更长时间
+            timeout=timeout_coding
         )
 
     def chat_completion(
