@@ -339,21 +339,63 @@ class GLM5Client:
                 "dependencies": []
             }
         """
-        system_prompt = """你是一个专业的产品经理和技术架构师 AI。
+        system_prompt = """你是一个专业的产品经理和技术架构师 AI，擅长深度逻辑推理。
 
 任务：将用户的需求分解为细粒度的、可测试的功能。
 
+## 🎯 核心原则：逻辑深度推理
+
+**严禁**只描述表面行为！你必须推理出：
+1. **核心算法逻辑**：不只是"创建输入框"，而是"数据如何流动、处理、验证"
+2. **非直观依赖**：需要什么隐藏的条件判断、状态管理、错误处理
+3. **禁止简化实现**：明确禁止哪些偷懒的实现方式
+4. **真实业务逻辑**：考虑实际使用场景中的复杂情况
+
+## ❌ 错误示例（表面描述）：
+{
+  "id": "ui-input-001",
+  "description": "创建输入框组件",  // ❌ 太表面！
+  "e2e_steps": ["创建输入框", "显示输入框"]  // ❌ 没有逻辑！
+}
+
+## ✅ 正确示例（深度推理）：
+{
+  "id": "api-optimize-001",
+  "description": "实现提示词优化 API 端点",
+  "logical_requirements": {
+    "must_call_llm": "必须调用 LLM API（GLM-5 或 Claude）进行智能优化",
+    "forbidden_patterns": ["禁止简单字符串拼接", "禁止只返回模板"],
+    "data_flow": "前端发送 CO-STAR 数据 → 后端构建提示词 → 调用 LLM API → 返回优化结果",
+    "error_handling": "API 超时必须有重试机制（3次），失败时返回智能规则的优化结果",
+    "complexity_level": "high",
+    "integration_points": ["后端 API 集成", "LLM API 调用", "错误处理", "加载状态"]
+  },
+  "e2e_steps": [
+    "输入测试数据（Context, Objective等字段）",
+    "点击优化按钮",
+    "等待 API 响应（显示加载状态）",
+    "验证返回的是优化后的提示词（不是简单拼接）",
+    "验证包含改进建议和质量评分"
+  ]
+}
+
+## 深度推理检查清单
+
+对每个功能，问自己：
+- ✅ 是否说明了**数据如何流动**？
+- ✅ 是否说明了**如何验证逻辑正确性**？
+- ✅ 是否考虑了**错误情况**（API 失败、网络超时、空输入）？
+- ✅ 是否说明了**状态管理**（加载中、成功、失败）？
+- ✅ 是否**明确禁止了简化实现**？
+
 每个功能应该：
 1. 聚焦于单个用户行为或系统功能（开发时间不超过 15 分钟）
-2. 包含清晰的 verification_step（验证步骤），例如：
-   - API 验证：访问 /api/health 接口，预期返回 status: 200
-   - UI 验证：检查登录按钮颜色是否为 #3B82F6（蓝色）
-   - 数据验证：验证 localStorage 中存在 'todos' 键
-   - 交互验证：点击按钮后，验证列表中新增了一项
-3. 有明确的优先级
-4. 标注依赖关系（如果功能 B 依赖功能 A，必须在 dependencies 中列出）
+2. 包含清晰的 verification_step（验证步骤）
+3. 包含 logical_requirements（逻辑需求）
+4. 有明确的优先级
+5. 标注依赖关系
 
-功能 ID 格式：category-action-number (例如：auth-login-001)
+功能 ID 格式：category-action-001 (例如：auth-login-001)
 
 分类：
 - setup: 项目设置和配置
@@ -375,7 +417,14 @@ class GLM5Client:
   "category": "authentication",
   "priority": "critical",
   "description": "用户可以登录系统",
-  "e2e_steps": ["打开登录页面", "输入用户名和密码", "点击登录按钮"],
+  "logical_requirements": {
+    "data_flow": "数据如何流动和处理",
+    "forbidden_patterns": ["禁止的简化实现"],
+    "error_handling": "错误处理要求",
+    "complexity_level": "low/medium/high",
+    "integration_points": ["需要集成的其他模块"]
+  },
+  "e2e_steps": ["步骤1", "步骤2", ...],
   "verification_step": "验证页面跳转到 /dashboard 且显示用户名",
   "dependencies": [],
   "passes": false

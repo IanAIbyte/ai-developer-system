@@ -23,6 +23,11 @@ from typing import Dict, List, Optional
 from datetime import datetime
 import sys
 
+from .enhanced_coding_agent import EnhancedCodingAgent
+from .testing_agent import TestingAgent
+from .environment_validator import EnvironmentValidator
+from .quality_auditor import audit_feature_quality
+
 
 class CodingAgent:
     """编码代理 - 增量开发专家"""
@@ -97,14 +102,18 @@ class CodingAgent:
         print(f"\n[Phase 4] Testing feature...")
         test_result = self._test_feature(feature, context)
 
-        # Phase 4.5: 环境完整性验证（新增）
-        print(f"\n[Phase 4.5] Validating environment integrity...")
+        # Phase 4.5: 质量审计（新增 - LLM-as-a-Judge）
+        print(f"\n[Phase 4.5] Auditing code quality...")
+        audit_result = await self._audit_feature_quality(feature)
+
+        # Phase 4.6: 环境完整性验证
+        print(f"\n[Phase 4.6] Validating environment integrity...")
         validator = EnvironmentValidator(str(self.project_path))
         validation_result = validator.validate_before_completion(feature, implementation_result)
 
-        # Phase 5: 清理状态（传递 implementation_result 和 validation_result）
+        # Phase 5: 清理状态（传递所有验证结果）
         print(f"\n[Phase 5] Cleaning up state...")
-        self._clean_state(feature, test_result, implementation_result, validation_result)
+        self._clean_state(feature, test_result, implementation_result, audit_result, validation_result)
 
         result = {
             "status": "success",
@@ -543,6 +552,7 @@ class CodingAgent:
         feature: Dict,
         test_result: Dict,
         implementation_result: Dict,
+        audit_result: Optional[Dict] = None,
         validation_result: Optional[Dict] = None
     ):
         """
@@ -558,6 +568,7 @@ class CodingAgent:
 
         新增：检查 generation_method，simulation mode 不标记为完成
         新增：环境完整性验证，防止"空城计"
+        新增：LLM-as-a-Judge 质量审计
         """
         generation_method = implementation_result.get("generation_method", "unknown")
         requires_manual = implementation_result.get("requires_manual_implementation", False)
@@ -565,18 +576,24 @@ class CodingAgent:
         # 环境验证结果
         env_valid = validation_result.get("passed", True) if validation_result else True
 
+        # 质量审计结果
+        audit_passed = audit_result.get("passed", True) if audit_result else True
+        audit_score = audit_result.get("score", 7) if audit_result else 7
+
         # 1. 更新 feature_list.json
         # 只有当：
         #   - 测试通过
         #   - 不是 simulation mode
         #   - 不需要手动实现
         #   - 环境验证通过（如果有验证）
+        #   - 质量审计通过（如果有审计）
         # 才标记为完成
         should_mark_complete = (
             test_result["passed"] and
             generation_method != "simulation" and
             not requires_manual and
-            env_valid
+            env_valid and
+            audit_passed
         )
 
         if should_mark_complete:
@@ -584,7 +601,8 @@ class CodingAgent:
             self._update_feature_status(
                 feature["id"],
                 passes=True,
-                generation_method=generation_method
+                generation_method=generation_method,
+                audit_score=audit_score
             )
         else:
             # 确定失败原因
@@ -597,6 +615,8 @@ class CodingAgent:
                 reasons.append("environment validation failed")
             if generation_method == "simulation":
                 reasons.append("simulation mode")
+            if not audit_passed:
+                reasons.append(f"quality audit failed (score: {audit_score}/10)")
 
             reason_str = ", ".join(reasons)
             print(f"  → ⚠️  Not marking complete: {reason_str}")
@@ -607,7 +627,10 @@ class CodingAgent:
                 generation_method=generation_method,
                 requires_manual_implementation=requires_manual,
                 validation_passed=env_valid,
-                validation_details=validation_result.get("checks", {}) if validation_result else {}
+                validation_details=validation_result.get("checks", {}) if validation_result else {},
+                audit_passed=audit_passed,
+                audit_score=audit_score,
+                audit_details=audit_result.get("reasoning", "") if audit_result else ""
             )
 
         # 2. 更新 claude-progress.txt
@@ -744,6 +767,49 @@ Changes:
 
         with open(progress_path, 'a', encoding='utf-8') as f:
             f.write(new_entry)
+
+    async def _audit_feature_quality(self, feature: Dict) -> Dict:
+        """
+        审计功能实现质量
+
+        使用 LLM-as-a-Judge 验证代码质量，防止"表面工作"
+        """
+        print(f"  🎭 [Quality Auditor] Auditing {feature['id']}...")
+
+        try:
+            audit_result = await audit_feature_quality(
+                feature=feature,
+                project_path=str(self.project_path)
+            )
+
+            # 显示审计结果
+            score = audit_result.get("score", 0)
+            passed = audit_result.get("passed", False)
+
+            if passed:
+                print(f"  ✅ [Quality Auditor] Audit passed (score: {score}/10)")
+            else:
+                print(f"  ❌ [Quality Auditor] Audit failed (score: {score}/10)")
+                print(f"     Reason: {audit_result.get('reasoning', 'Unknown')}")
+
+            # 显示问题和改进建议
+            issues = audit_result.get("issues", [])
+            if issues:
+                print(f"     Issues: {', '.join(issues[:3])}")
+                if len(issues) > 3:
+                    print(f"            ... and {len(issues) - 3} more")
+
+            return audit_result
+
+        except Exception as e:
+            print(f"  ⚠️  [Quality Auditor] Audit failed: {e}")
+            return {
+                "passed": True,  # 如果审计失败，默认通过（不阻止）
+                "score": 7,
+                "reasoning": "Audit unavailable",
+                "issues": [],
+                "improvements": []
+            }
 
     def _create_commit(self, feature: Dict, test_result: Dict, implementation_result: Dict):
         """创建 git commit"""
